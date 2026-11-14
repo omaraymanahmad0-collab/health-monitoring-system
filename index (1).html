@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ASTRA // ORBITAL EVA OS</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@500;700&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/environments/RoomEnvironment.js"></script>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+
+  <canvas id="stage3d"></canvas>
+
+  <header class="top-bar">
+    <div class="capsule">
+      <span id="statusDot" class="status-dot"></span>
+      <span class="brand-name">ASTRA // ORBITAL EVA OS</span>
+      <span id="modelTag" class="brand-sub">Photorealistic PBR xEMU Digital Twin</span>
+    </div>
+
+    <div class="capsule">
+      <select id="crewSelect" class="crew-select" onchange="switchCrew(this.value)">
+        <option value="amira">Cdr. Amira Hassan - Mission Commander</option>
+        <option value="lukas">FE. Lukas Berg - Flight Engineer</option>
+        <option value="yuki">MS. Yuki Tanaka - Mission Specialist</option>
+      </select>
+      <span style="color:var(--stroke)">|</span>
+      <span id="clock" class="mono">MET 04:22:00</span>
+      <span style="color:var(--stroke)">|</span>
+      <span id="whoName" style="font-size:12px;font-weight:600"></span>
+      <span id="whoRole" class="role-badge"></span>
+      <button class="mini-btn" onclick="openAlerts()">Alerts</button>
+      <button id="usersBtn" class="mini-btn" style="display:none" onclick="openUsers()">Users</button>
+      <button class="mini-btn" onclick="doLogout()">Log out</button>
+    </div>
+  </header>
+
+  <div id="errBanner" class="err-banner">
+    <span>&#9888;</span>
+    <span id="errText"></span>
+    <button onclick="openReport(document.getElementById('errBanner').dataset.aid)">View report</button>
+  </div>
+
+  <aside class="hud-wing left">
+    <div id="node-neut" class="hud-node">
+      <div class="node-kicker"><span>CANS Neutron</span><span>RBE 15x</span></div>
+      <div id="valNeut" class="node-value">6.2 µSv/h</div>
+      <div id="valCum" class="node-foot">Career: 184.2 / 600 mSv</div>
+    </div>
+
+    <div id="node-hr" class="hud-node">
+      <div class="node-kicker"><span>Heart Rate</span><span>PPG</span></div>
+      <div id="valHr" class="node-value">64 BPM</div>
+      <canvas id="ppgWave" height="28" style="width:100%; margin-top:4px"></canvas>
+    </div>
+
+    <div id="node-ai" class="hud-node">
+      <div class="node-kicker"><span>AI Co-pilot</span><span id="aiTag">LOADING</span></div>
+      <div id="valAi" class="node-value">—</div>
+      <div id="valAiFoot" class="node-foot">Loading models…</div>
+      <div class="ai-bar"><div id="aiBarFill" class="ai-bar-fill"></div></div>
+    </div>
+  </aside>
+
+  <aside class="hud-wing right">
+    <div id="node-o2" class="hud-node">
+      <div class="node-kicker"><span>Suit O2 & Pressure</span><span>PLSS</span></div>
+      <div id="valO2Psi" class="node-value">98.6% · 4.30</div>
+      <div id="valTemp" class="node-foot">Skin Temp: 36.6 °C</div>
+    </div>
+
+    <div id="node-health" class="hud-node">
+      <div class="node-kicker"><span>Crew Health AI</span><span id="healthTag">...</span></div>
+      <div id="valHealth" class="node-value">-- / 100</div>
+      <div id="healthFeedback" class="node-foot">Waiting for telemetry...</div>
+      <div id="healthAction" class="node-foot health-action"></div>
+      <div class="ai-bar"><div id="healthBar" class="ai-bar-fill"></div></div>
+      <button id="reportBtn" class="rpt-btn" style="display:none" onclick="openReport()">VIEW INCIDENT REPORT</button>
+    </div>
+
+    <div id="ringOrb" class="ring-orb">
+      <div class="node-kicker" style="justify-content:center"><span>ASTRA-RING HAPTIC</span></div>
+      <canvas id="ringMini" width="140" height="82"></canvas>
+      <div id="ringLabel" class="node-foot" style="color:var(--mint); font-weight:600">Standby · Nominal</div>
+    </div>
+  </aside>
+
+  <div class="dock-wrap">
+    <div id="aiToast" class="ai-toast">
+      <span id="toastBadge" class="toast-badge">NORMAL</span>
+      <span id="toastMsg">All suit life-support and neutron sensors balanced.</span>
+    </div>
+
+    <div class="dock">
+      <div class="dock-group">
+        <span class="dock-label">Simulate</span>
+        <button id="sc-Nominal" class="pill-btn nom active" onclick="setScenario('Nominal')">Normal</button>
+        <button id="sc-Solar Storm" class="pill-btn" onclick="setScenario('Solar Storm')">Solar Storm</button>
+        <button id="sc-Suit Leak" class="pill-btn" onclick="setScenario('Suit Leak')">Suit Leak</button>
+        <button id="sc-Thermal Spike" class="pill-btn" onclick="setScenario('Thermal Spike')">Thermal Spike</button>
+      </div>
+
+      <div class="dock-divider"></div>
+
+      <div class="dock-group">
+        <span class="dock-label">Suit Fix</span>
+        <button id="fix-shield_shelter" class="fix-btn" onclick="resolveWith('shield_shelter')">Deploy Shielding</button>
+        <button id="fix-o2_boost" class="fix-btn" onclick="resolveWith('o2_boost')">O2 Pressure Purge</button>
+        <button id="fix-cool_max" class="fix-btn" onclick="resolveWith('cool_max')">Max LCVG Cooling</button>
+      </div>
+
+      <div class="dock-divider"></div>
+
+      <div class="dock-group">
+        <button class="pill-btn" onclick="focusView('FULL')">Suit</button>
+        <button class="pill-btn" onclick="focusView('HELMET')">Helmet</button>
+        <button class="pill-btn" onclick="focusView('CHEST')">Chest</button>
+        <button class="pill-btn" onclick="focusView('RING')">Ring</button>
+      </div>
+    </div>
+  </div>
+
+<div id="loginScreen" class="login-screen">
+  <div class="login-card">
+    <h1>ASTRA // ORBITAL EVA OS</h1>
+    <p>Sign in as an astronaut (user), a doctor, or an admin.</p>
+    <input id="loginUser" placeholder="Username" autocomplete="username">
+    <input id="loginPass" type="password" placeholder="Password" autocomplete="current-password"
+           onkeydown="if (event.key === 'Enter') doLogin()">
+    <button class="go" onclick="doLogin()">Sign in</button>
+    <div id="loginErr" class="login-err"></div>
+  </div>
+</div>
+
+<div id="alertsModal" class="modal" onclick="if (event.target === this) this.classList.remove('show')">
+  <div class="modal-card">
+    <div class="modal-head"><span>Alert log</span><button onclick="document.getElementById('alertsModal').classList.remove('show')">Close</button></div>
+    <div class="adm-body"><table class="adm-table"><thead><tr><th>Time</th><th>Crew</th><th>Level</th><th>Message</th></tr></thead>
+      <tbody id="alertsBody"></tbody></table></div>
+  </div>
+</div>
+
+<div id="usersModal" class="modal" onclick="if (event.target === this) this.classList.remove('show')">
+  <div class="modal-card">
+    <div class="modal-head"><span>User management (admin)</span><button onclick="document.getElementById('usersModal').classList.remove('show')">Close</button></div>
+    <div class="adm-body">
+      <table class="adm-table"><thead><tr><th>Username</th><th>Type</th><th>Astronaut</th><th>Name</th><th></th></tr></thead>
+        <tbody id="usersBody"></tbody></table>
+      <div class="adm-form">
+        <input id="nuUser" placeholder="New username">
+        <input id="nuPass" type="password" placeholder="Password (min 6)">
+        <input id="nuName" placeholder="Display name">
+        <select id="nuRole" onchange="document.getElementById('nuAid').style.display = this.value === 'user' ? '' : 'none'">
+          <option value="user">User (astronaut)</option><option value="doctor">Doctor</option><option value="admin">Admin</option>
+        </select>
+        <select id="nuAid"><option value="amira">Linked astronaut: amira</option><option value="lukas">Linked astronaut: lukas</option><option value="yuki">Linked astronaut: yuki</option></select>
+        <button onclick="createUser()">Create account</button>
+        <div id="nuMsg" class="adm-msg"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="reportModal" class="modal" onclick="if (event.target === this) closeReport()">
+    <div class="modal-card">
+      <div class="modal-head"><span id="rptTitle">Incident report</span><button onclick="closeReport()">Close</button></div>
+      <pre id="rptBody"></pre>
+      <div class="modal-foot">
+        <button onclick="copyReport()">Copy</button>
+        <button onclick="downloadReport()">Download .txt</button>
+      </div>
+    </div>
+  </div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>
